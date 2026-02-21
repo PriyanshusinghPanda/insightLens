@@ -1,7 +1,7 @@
 import os
-from openai import OpenAI
+from google import genai
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def summarize_reviews(question, reviews):
 
@@ -19,10 +19,9 @@ Explain main reasons for ratings.
 Give bullet insights.
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=prompt,
     )
 
-    return response.choices[0].message.content
+    return response.text
