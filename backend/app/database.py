@@ -7,7 +7,7 @@ db_token = os.getenv("TURSO_AUTH_TOKEN")
 
 if db_url and db_token:
     if db_url.startswith("https://"):
-        db_url = db_url.replace("https://", "libsql://", 1)else:
+        db_url = db_url.replace("https://", "libsql://", 1)
     DATABASE_URL = f"sqlite+{db_url}?auth_token={db_token}"
 else:
     DATABASE_URL = "sqlite:///./insightlens.db"
