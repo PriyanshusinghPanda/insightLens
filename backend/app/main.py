@@ -7,7 +7,7 @@ from app.models import user, product, review, report, conversation, analyst_cate
 
 from app.routes import auth, analytics, chat, reports
 
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="InsightLens AI")
 
