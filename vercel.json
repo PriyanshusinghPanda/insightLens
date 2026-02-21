@@ -1,9 +1,7 @@
 {
   "version": 2,
+  "trailingSlash": false,
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "app/main.py"
-    }
+    { "source": "/(.*)", "destination": "app/main.py" }
   ]
 }
