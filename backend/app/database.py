@@ -17,8 +17,13 @@ def init_db():
     TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
     if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
-        # Just use the simple sqlite+libsql:// url
-        db_url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+libsql://")
+        # Force the Secure WebSocket protocol (wss://) to prevent HTTP 405 Method Not Allowed errors
+        if TURSO_DATABASE_URL.startswith("libsql://"):
+            db_url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+wss://")
+        elif TURSO_DATABASE_URL.startswith("https://"):
+            db_url = TURSO_DATABASE_URL.replace("https://", "sqlite+wss://")
+        else:
+            db_url = TURSO_DATABASE_URL
 
         # Pass the auth token directly to the underlying DBAPI driver
         engine = create_engine(
