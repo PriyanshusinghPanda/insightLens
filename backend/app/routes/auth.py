@@ -39,3 +39,14 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_token({"user_id": user.id, "role": user.role})
     return {"access_token": token}
+
+@router.get("/debug-env")
+def debug_env():
+    import os
+    turso_url = os.getenv("TURSO_DATABASE_URL") or os.getenv("DATABASE_URL") or ""
+    turso_token = os.getenv("TURSO_AUTH_TOKEN") or ""
+    return {
+        "url_len": len(turso_url),
+        "token_len": len(turso_token),
+        "url_start": turso_url[:10] if turso_url else None
+    }
