@@ -9,12 +9,19 @@ TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL") or os.getenv("DATABASE_URL"
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
 if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
-    # Convert libsql:// to sqlite+libsql:// for the SQLAlchemy dialect
     url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+libsql://")
 
-    # The query param specifically needs to be just `authToken` for standard sqlalchemy-libsql to work correctly, and `secure=true` prevents 308 redirects from Turso.
+    # SQLAlchemy allows passing the auth token as a password in the URL
+    # format: sqlite+libsql://:{token}@{hostname}:443/?secure=true
+    import urllib.parse
+    parsed_url = urllib.parse.urlparse(url)
+    
+    # We construct the URL with the token as the password
+    # The hostname contains the actual Turso DB url
+    db_url = f"sqlite+libsql://:{TURSO_AUTH_TOKEN}@{parsed_url.netloc}/?secure=true"
+
     engine = create_engine(
-        f"{url}/?authToken={TURSO_AUTH_TOKEN}&secure=true",
+        db_url,
         connect_args={"check_same_thread": False}
     )
 
