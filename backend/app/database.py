@@ -2,25 +2,33 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from libsql_client import create_client_sync
+from dotenv import load_dotenv
 
-db_url = os.getenv("TURSO_DATABASE_URL")
-db_token = os.getenv("TURSO_AUTH_TOKEN")
+load_dotenv()
 
-if db_url and db_token:
-    if db_url.startswith("libsql://"):
-        url = db_url.replace("libsql://", "https://")
-    elif not db_url.startswith("https://"):
-        url = f"https://{db_url}"
-    else:
-        url = db_url
+TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL")
+TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
+
+if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+    # Convert libsql:// to https:// for the client
+    url = TURSO_DATABASE_URL.replace("libsql://", "https://")
+
+    client = create_client_sync(
+        url=url,
+        auth_token=TURSO_AUTH_TOKEN
+    )
 
     engine = create_engine(
-        "sqlite://", 
-        creator=lambda: create_client_sync(url, auth_token=db_token)._create_connection()
+        "sqlite://",
+        creator=lambda: client._create_connection()
     )
-else:
-    DATABASE_URL = "sqlite:///./insightlens.db"
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+else:
+    # fallback local sqlite
+    engine = create_engine(
+        "sqlite:///./insightlens.db",
+        connect_args={"check_same_thread": False}
+    )
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
