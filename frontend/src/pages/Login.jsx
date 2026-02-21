@@ -18,21 +18,26 @@ export default function Login() {
   };
 
   return (
-    <div style={{ padding: 40 }}>
-      <h2>InsightLens AI Login</h2>
-
-      <input
-        placeholder="Email"
-        onChange={(e) => setEmail(e.target.value)}
-      /><br/><br/>
-
-      <input
-        type="password"
-        placeholder="Password"
-        onChange={(e) => setPassword(e.target.value)}
-      /><br/><br/>
-
-      <button onClick={handleLogin}>Login</button>
+    <div className="app-container">
+      <div className="login-box">
+        <h2 className="page-title" style={{ textAlign: "center", marginBottom: "24px" }}>InsightLens</h2>
+        
+        <input
+          className="minimal-input"
+          placeholder="Email address"
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        
+        <input
+          className="minimal-input"
+          type="password"
+          placeholder="Password"
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ marginBottom: "24px" }}
+        />
+        
+        <button className="minimal-button" onClick={handleLogin}>Log in to dashboard</button>
+      </div>
     </div>
   );
 }

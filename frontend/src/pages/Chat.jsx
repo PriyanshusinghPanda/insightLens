@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { askQuestion } from "../api";
+import { useNavigate } from "react-router-dom";
 
 export default function Chat() {
   const token = localStorage.getItem("token");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
+  const navigate = useNavigate();
 
   const sendQuestion = async () => {
     const res = await askQuestion(1, question, token);
@@ -19,26 +21,37 @@ export default function Chat() {
   };
 
   return (
-    <div style={{ padding: 30 }}>
-      <h2>AI Product Analyst</h2>
+    <div className="app-container page-container">
+      <div>
+        <h2 className="page-title">AI Product Analyst</h2>
+        <div className="page-subtitle">Ask questions about your product reviews and customer feedback.</div>
+      </div>
 
-      <div style={{ border: "1px solid gray", padding: 10, height: 300, overflowY: "scroll" }}>
+      <div className="chat-container">
+        {messages.length === 0 && (
+          <div style={{ margin: "auto", color: "#888", fontSize: "14px" }}>Send a message to start the analysis.</div>
+        )}
         {messages.map((m, i) => (
-          <p key={i}>
-            <b>{m.role === "user" ? "You" : "AI"}:</b> {m.text}
-          </p>
+          <div key={i} className={`chat-message ${m.role}`}>
+            {m.text}
+          </div>
         ))}
       </div>
 
-      <br/>
+      <div className="chat-input-row">
+        <input
+          className="minimal-input"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask about product reviews... e.g., 'What do users complain about?'"
+          onKeyDown={(e) => e.key === 'Enter' && sendQuestion()}
+        />
+        <button className="minimal-button" onClick={sendQuestion}>Send</button>
+      </div>
 
-      <input
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        placeholder="Ask about product reviews..."
-      />
-
-      <button onClick={sendQuestion}>Send</button>
+      <button className="minimal-button secondary" onClick={() => navigate("/dashboard")} style={{ width: "fit-content", marginTop: "12px" }}>
+        &larr; Back to Dashboard
+      </button>
     </div>
   );
 }

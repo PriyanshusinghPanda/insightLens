@@ -5,9 +5,7 @@ const API = axios.create({
 });
 
 export const login = (email, password) =>
-  API.post("/auth/login", null, {
-    params: { email, password },
-  });
+  API.post("/auth/login", { email, password });
 
 export const askQuestion = (product_id, question, token) =>
   API.post(

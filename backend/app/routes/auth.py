@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.user import User
@@ -13,18 +14,27 @@ def get_db():
     finally:
         db.close()
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    role: str = "user"
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 @router.post("/register")
-def register(email: str, password: str, role: str, db: Session = Depends(get_db)):
-    user = User(email=email, password=hash_password(password), role=role)
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    user = User(email=req.email, password=hash_password(req.password), role=req.role)
     db.add(user)
     db.commit()
     return {"message": "created"}
 
 @router.post("/login")
-def login(email: str, password: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == email).first()
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email).first()
 
-    if not user or not verify_password(password, user.password):
+    if not user or not verify_password(req.password, user.password):
         return {"error": "Invalid credentials"}
 
     token = create_token({"user_id": user.id, "role": user.role})

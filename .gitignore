@@ -1,5 +1,21 @@
-.venv
+# Virtual environments
+.venv/
+venv/
+env/
 .env
 
-basic.py
-temp.py
+# Python Python caches and logs
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Databases
+*.db
+*.sqlite3
+
+# Node modules (frontend)
+node_modules/
+dist/
+build/
+.DS_Store

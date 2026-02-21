@@ -27,16 +27,27 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ padding: 30 }}>
-      <h2>Dashboard</h2>
-      <h3>NPS Score: {nps}</h3>
-
-      <div style={{ width: 300 }}>
-        <Pie data={data} />
+    <div className="app-container page-container">
+      <div>
+        <h2 className="page-title">Dashboard</h2>
+        <div className="page-subtitle">NPS Score: {nps}</div>
       </div>
 
-      <br />
-      <button onClick={() => navigate("/chat")}>
+      <div className="dashboard-card" style={{ width: "fit-content" }}>
+        <h3 style={{ fontSize: "14px", marginTop: 0, marginBottom: "16px", fontWeight: 500 }}>Customer Sentiment</h3>
+        <div style={{ width: 240 }}>
+          <Pie
+            data={data}
+            options={{
+              plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6, font: { family: 'Inter, sans-serif' } } }
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <button className="minimal-button secondary" onClick={() => navigate("/chat")} style={{ width: "fit-content" }}>
         Go to AI Analysis Chat
       </button>
     </div>
