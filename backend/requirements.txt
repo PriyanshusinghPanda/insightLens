@@ -3,6 +3,7 @@ uvicorn
 fastapi
 motor
 pymongo[srv]
+certifi
 bcrypt
 python-jose[cryptography]
 google-genai
