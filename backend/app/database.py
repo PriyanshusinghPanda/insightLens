@@ -1,7 +1,6 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from libsql_client import create_client_sync
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,17 +9,12 @@ TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL")
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
 if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
-    # Convert libsql:// to https:// for the client
-    url = TURSO_DATABASE_URL.replace("libsql://", "https://")
-
-    client = create_client_sync(
-        url=url,
-        auth_token=TURSO_AUTH_TOKEN
-    )
+    # Convert libsql:// to sqlite+libsql:// for the SQLAlchemy dialect
+    url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+libsql://")
 
     engine = create_engine(
-        "sqlite://",
-        creator=lambda: client._create_connection()
+        f"{url}/?authToken={TURSO_AUTH_TOKEN}&secure=true",
+        connect_args={"check_same_thread": False}
     )
 
 else:
