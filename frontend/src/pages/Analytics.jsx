@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { getAnalyticsData } from "../api";
 import { Line } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -21,12 +23,23 @@ ChartJS.register(
 );
 
 export default function Analytics() {
+    const token = localStorage.getItem("token");
+    const [data, setData] = useState({
+        current_nps: 0,
+        trend: [0, 0, 0, 0, 0, 0],
+        distribution: {}
+    });
+
+    useEffect(() => {
+        getAnalyticsData(token).then(res => setData(res.data)).catch(console.error);
+    }, [token]);
+
     const chartData = {
         labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
         datasets: [
             {
                 label: 'NPS Score',
-                data: [45, 52, 58, 55, 60, 68],
+                data: data.trend,
                 borderColor: '#3b82f6',
                 backgroundColor: '#3b82f6',
                 pointBackgroundColor: '#fff',
@@ -70,22 +83,44 @@ export default function Analytics() {
 
                 {/* Highlight Banner Section */}
                 <div className="analytics-banner">
-                    <b>Current NPS: 68</b> - Indicating strong customer loyalty. An NPS above 50 is excellent. Continue monitoring trends to maintain this performance.
+                    <b>Current NPS: {data.current_nps}</b> - Indicating customer loyalty based on the distribution of your latest product reviews.
                 </div>
             </div>
 
             <div className="dashboard-grid">
                 <div className="dashboard-card" style={{ height: "300px" }}>
                     <h3 className="card-title" style={{ fontSize: "14px" }}>Customer Satisfaction</h3>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "80%", color: "#888" }}>
-                        Not enough data available.
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "80%", color: "#111" }}>
+                        <h1 style={{ fontSize: "48px", margin: 0, color: data.current_nps > 0 ? "#10b981" : "#dc2626" }}>
+                            {data.current_nps > 0 ? "Positive" : "Negative"}
+                        </h1>
+                        <p style={{ color: "#6b7280", marginTop: "12px" }}>Overall Net Promoter Score: {data.current_nps}</p>
                     </div>
                 </div>
 
                 <div className="dashboard-card" style={{ height: "300px" }}>
                     <h3 className="card-title" style={{ fontSize: "14px" }}>Rating Distribution</h3>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "80%", color: "#888" }}>
-                        Not enough data available.
+                    <div style={{ padding: "0 20px" }}>
+                        {["5", "4", "3", "2", "1"].map(star => {
+                            const maxDist = Math.max(...Object.values(data.distribution), 1);
+                            const val = data.distribution[star] || 0;
+                            const percentage = (val / maxDist) * 100;
+
+                            return (
+                                <div key={star} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                                    <span style={{ width: "40px", fontSize: "12px" }}>{star} Stars</span>
+                                    <div style={{ flex: 1, backgroundColor: "#f3f4f6", height: "8px", borderRadius: "4px" }}>
+                                        <div style={{
+                                            width: `${percentage}%`,
+                                            backgroundColor: "#fbbf24",
+                                            height: "100%",
+                                            borderRadius: "4px"
+                                        }} />
+                                    </div>
+                                    <span style={{ width: "30px", fontSize: "12px", textAlign: "right" }}>{val}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

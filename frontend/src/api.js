@@ -25,3 +25,13 @@ export const getSentiment = (id, token) =>
   API.get(`/analytics/sentiment/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
+export const getDashboardStats = (token) =>
+  API.get("/analytics/dashboard-stats", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+export const getAnalyticsData = (token) =>
+  API.get("/analytics/analytics-data", {
+    headers: { Authorization: `Bearer ${token}` },
+  });

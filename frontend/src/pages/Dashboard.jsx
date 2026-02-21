@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getNPS, getSentiment } from "../api";
+import { getDashboardStats } from "../api";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -22,27 +22,30 @@ ChartJS.register(
 
 export default function Dashboard() {
   const token = localStorage.getItem("token");
-  const [nps, setNps] = useState(0);
-  const productId = 1;
+  const [stats, setStats] = useState({
+    category_performance: [],
+    top_products: [],
+    bad_products: []
+  });
 
   useEffect(() => {
-    getNPS(productId, token).then(res => setNps(res.data.nps_score)).catch(e => console.error(e));
+    getDashboardStats(token).then(res => setStats(res.data)).catch(e => console.error(e));
   }, [token]);
 
-  // Mock Category Performance Data
+  // Real Category Performance Data
   const chartData = {
-    labels: ['Electronics', 'Home & Kitchen', 'Books', 'Sports'],
+    labels: stats.category_performance.map(c => c.category),
     datasets: [
       {
         label: 'NPS Score',
-        data: [56, 57, 73, 48],
+        data: stats.category_performance.map(c => c.nps),
         backgroundColor: '#3b82f6', // Blue
         barPercentage: 0.6,
         categoryPercentage: 0.8,
       },
       {
         label: 'Avg Rating',
-        data: [4.3, 4.0, 4.8, 3.9],
+        data: stats.category_performance.map(c => c.avg_rating),
         backgroundColor: '#10b981', // Green
         barPercentage: 0.6,
         categoryPercentage: 0.8,
@@ -63,17 +66,8 @@ export default function Dashboard() {
     }
   };
 
-  const topProducts = [
-    { rank: 1, name: "Air Fryer XL", category: "Home & Kitchen", nps: 82, rating: 4.7 },
-    { rank: 2, name: "iPhone 13 Pro", category: "Electronics", nps: 68, rating: 4.5 },
-    { rank: 3, name: "Samsung Galaxy S21", category: "Electronics", nps: 54, rating: 4.2 },
-  ];
-
-  const badProducts = [
-    { name: "Coffee Maker X", category: "Home & Kitchen", nps: 12, rating: 2.1 },
-    { name: "Gaming Headset", category: "Electronics", nps: 18, rating: 2.5 },
-    { name: "Samsung Galaxy S10", category: "Electronics", nps: 22, rating: 2.8 },
-  ];
+  const topProducts = stats.top_products.map((p, i) => ({ ...p, rank: i + 1 }));
+  const badProducts = stats.bad_products;
 
   return (
     <div className="page-container">
