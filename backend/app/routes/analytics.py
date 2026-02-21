@@ -3,25 +3,24 @@ from app.services.analytics_service import get_product_reviews, sentiment_counts
 from app.services.nps_service import calculate_nps
 from app.utils.dependencies import get_current_user
 from app.database import get_db
-from sqlalchemy.orm import Session
 
 router = APIRouter()
 
 @router.get("/dashboard-stats")
-def dashboard_stats(user=Depends(get_current_user), db: Session = Depends(get_db)):
-    return get_dashboard_stats(db, user["user_id"], user.get("role"))
+async def dashboard_stats(user=Depends(get_current_user), db = Depends(get_db)):
+    return await get_dashboard_stats(db, user["user_id"], user.get("role"))
 
 @router.get("/analytics-data")
-def analytics_data(user=Depends(get_current_user), db: Session = Depends(get_db)):
-    return get_analytics_data(db, user["user_id"], user.get("role"))
+async def analytics_data(user=Depends(get_current_user), db = Depends(get_db)):
+    return await get_analytics_data(db, user["user_id"], user.get("role"))
 
 @router.get("/nps/{product_id}")
-def nps(product_id: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
-    reviews = get_product_reviews(db, product_id, user["user_id"], user.get("role"))
+async def nps(product_id: int, user=Depends(get_current_user), db = Depends(get_db)):
+    reviews = await get_product_reviews(db, product_id, user["user_id"], user.get("role"))
     score = calculate_nps(reviews)
     return {"nps_score": score}
 
 @router.get("/sentiment/{product_id}")
-def sentiment(product_id: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
-    happy, unhappy = sentiment_counts(db, product_id, user["user_id"], user.get("role"))
+async def sentiment(product_id: int, user=Depends(get_current_user), db = Depends(get_db)):
+    happy, unhappy = await sentiment_counts(db, product_id, user["user_id"], user.get("role"))
     return {"happy": happy, "unhappy": unhappy}

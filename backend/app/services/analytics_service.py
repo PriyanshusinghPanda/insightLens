@@ -1,106 +1,155 @@
-from app.models.review import Review
+async def get_allowed_categories(db, user_id):
+    cursor = db.analyst_category.find({"user_id": user_id})
+    rows = await cursor.to_list(length=100)
+    return [r["category"] for r in rows]
 
-def get_product_reviews(db, product_id, user_id, role):
-    from app.models.product import Product
-    allowed_cats = get_allowed_categories(db, user_id) if role != "admin" else []
+async def get_product_reviews(db, product_id, user_id, role):
+    allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
     
-    query = db.query(Review).join(Product, Review.product_id == Product.id).filter(Review.product_id == product_id)
+    pipeline = [
+        {"$match": {"product_id": product_id}},
+        {"$lookup": {
+            "from": "products",
+            "localField": "product_id",
+            "foreignField": "id",
+            "as": "product_info"
+        }},
+        {"$unwind": "$product_info"}
+    ]
+    
     if role != "admin":
         if not allowed_cats:
             return []
-        query = query.filter(Product.category.in_(allowed_cats))
+        pipeline.append({"$match": {"product_info.category": {"$in": allowed_cats}}})
         
-    reviews = query.all()
+    cursor = db.reviews.aggregate(pipeline)
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
     return reviews
 
-def sentiment_counts(db, product_id, user_id, role):
-    from app.models.product import Product
-    allowed_cats = get_allowed_categories(db, user_id) if role != "admin" else []
+
+async def sentiment_counts(db, product_id, user_id, role):
+    allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
     
-    query = db.query(Review).join(Product, Review.product_id == Product.id).filter(Review.product_id == product_id)
+    pipeline = [
+        {"$match": {"product_id": product_id}},
+        {"$lookup": {
+            "from": "products",
+            "localField": "product_id",
+            "foreignField": "id",
+            "as": "product_info"
+        }},
+        {"$unwind": "$product_info"}
+    ]
+    
     if role != "admin":
         if not allowed_cats:
             return 0, 0
-        query = query.filter(Product.category.in_(allowed_cats))
+        pipeline.append({"$match": {"product_info.category": {"$in": allowed_cats}}})
         
-    happy = query.filter(Review.sentiment == "happy").count()
-    unhappy = query.filter(Review.sentiment == "unhappy").count()
+    pipeline.append({
+        "$group": {
+            "_id": "$sentiment",
+            "count": {"$sum": 1}
+        }
+    })
+    
+    cursor = db.reviews.aggregate(pipeline)
+    happy, unhappy = 0, 0
+    async for doc in cursor:
+        if doc["_id"] == "happy":
+            happy = doc["count"]
+        elif doc["_id"] == "unhappy":
+            unhappy = doc["count"]
+            
     return happy, unhappy
 
-def get_allowed_categories(db, user_id):
-    from app.models.analyst_category import AnalystCategory
-    rows = db.query(AnalystCategory).filter(AnalystCategory.user_id == user_id).all()
-    return [r.category for r in rows]
 
-def get_dashboard_stats(db, user_id, role):
-    from sqlalchemy import func, case
-    from app.models.product import Product
-
-    allowed_cats = get_allowed_categories(db, user_id) if role != "admin" else []
+async def get_dashboard_stats(db, user_id, role):
+    allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
     
-    # 1. Category Performance (Top 5 categories by review count to keep it clean)
-    query = db.query(
-        Product.category,
-        func.count(Review.id).label("total_reviews"),
-        func.avg(Review.rating).label("avg_rating"),
-        func.sum(case((Review.rating >= 4, 1), else_=0)).label("promoters"),
-        func.sum(case((Review.rating <= 2, 1), else_=0)).label("detractors")
-    ).join(Review, Product.id == Review.product_id)
-
-    if role != "admin" and allowed_cats:
-        query = query.filter(Product.category.in_(allowed_cats))
-    elif role != "admin" and not allowed_cats:
-        # returns empty if no allowed categories
+    match_stage = {"$match": {"category": {"$in": allowed_cats}}} if (role != "admin" and allowed_cats) else {}
+    if role != "admin" and not allowed_cats:
         return {"category_performance": [], "top_products": [], "bad_products": []}
-        
-    category_stats = query.group_by(Product.category) \
-     .order_by(func.count(Review.id).desc()) \
-     .limit(5).all()
 
+    # Pipeline for Products + Reviews data combined
+    pipeline = []
+    if match_stage:
+        pipeline.append(match_stage)
+        
+    pipeline.extend([
+        {"$lookup": {
+            "from": "reviews",
+            "localField": "id",
+            "foreignField": "product_id",
+            "as": "reviews"
+        }},
+        {"$unwind": {"path": "$reviews", "preserveNullAndEmptyArrays": False}},
+        {"$project": {
+            "id": 1,
+            "name": 1,
+            "category": 1,
+            "rating": "$reviews.rating",
+            "is_promoter": {"$cond": [{"$gte": ["$reviews.rating", 4]}, 1, 0]},
+            "is_detractor": {"$cond": [{"$lte": ["$reviews.rating", 2]}, 1, 0]},
+        }}
+    ])
+    
+    # 1. Category Performance Pipeline
+    cat_pipeline = pipeline + [
+        {"$group": {
+            "_id": "$category",
+            "total_reviews": {"$sum": 1},
+            "avg_rating": {"$avg": "$rating"},
+            "promoters": {"$sum": "$is_promoter"},
+            "detractors": {"$sum": "$is_detractor"}
+        }},
+        {"$sort": {"total_reviews": -1}},
+        {"$limit": 5}
+    ]
+    
+    cat_cursor = db.products.aggregate(cat_pipeline)
     categories = []
-    for stat in category_stats:
-        # Calculate NPS: ((Promoters - Detractors) / Total) * 100
-        nps = ((stat.promoters - stat.detractors) / stat.total_reviews * 100) if stat.total_reviews > 0 else 0
+    async for stat in cat_cursor:
+        nps = ((stat["promoters"] - stat["detractors"]) / stat["total_reviews"] * 100) if stat["total_reviews"] > 0 else 0
         categories.append({
-            "category": stat.category,
+            "category": stat["_id"],
             "nps": round(nps),
-            "avg_rating": round(stat.avg_rating, 1) if stat.avg_rating else 0
+            "avg_rating": round(stat["avg_rating"], 1) if stat["avg_rating"] else 0
         })
 
-    # 2. Top Performing Products
-    p_query = db.query(
-        Product.name,
-        Product.category,
-        func.count(Review.id).label("total_reviews"),
-        func.avg(Review.rating).label("avg_rating"),
-        func.sum(case((Review.rating >= 4, 1), else_=0)).label("promoters"),
-        func.sum(case((Review.rating <= 2, 1), else_=0)).label("detractors")
-    ).join(Review, Product.id == Review.product_id)
-
-    if role != "admin" and allowed_cats:
-        p_query = p_query.filter(Product.category.in_(allowed_cats))
-        
-    product_stats_query = p_query.group_by(Product.id) \
-     .having(func.count(Review.id) >= 5) # Only products with enough reviews
-
-    all_products = product_stats_query.all()
+    # 2. Product Performance Pipeline
+    prod_pipeline = pipeline + [
+        {"$group": {
+            "_id": "$id",
+            "name": {"$first": "$name"},
+            "category": {"$first": "$category"},
+            "total_reviews": {"$sum": 1},
+            "avg_rating": {"$avg": "$rating"},
+            "promoters": {"$sum": "$is_promoter"},
+            "detractors": {"$sum": "$is_detractor"}
+        }},
+        {"$match": {"total_reviews": {"$gte": 5}}}
+    ]
     
+    prod_cursor = db.products.aggregate(prod_pipeline)
     product_scores = []
-    for p in all_products:
-        nps = ((p.promoters - p.detractors) / p.total_reviews * 100) if p.total_reviews > 0 else 0
+    async for p in prod_cursor:
+        nps = ((p["promoters"] - p["detractors"]) / p["total_reviews"] * 100) if p["total_reviews"] > 0 else 0
+        name = p["name"]
         product_scores.append({
-            "name": p.name[:30] + '...' if len(p.name) > 30 else p.name,
-            "category": p.category,
+            "name": name[:30] + '...' if len(name) > 30 else name,
+            "category": p["category"],
             "nps": round(nps),
-            "rating": round(p.avg_rating, 1) if p.avg_rating else 0
+            "rating": round(p["avg_rating"], 1) if p["avg_rating"] else 0
         })
-    
-    # Sort by NPS descending for Top, ascending for Bottom
+        
     product_scores.sort(key=lambda x: x["nps"], reverse=True)
     
     top_products = product_scores[:5]
     bad_products = product_scores[-5:]
-    bad_products.sort(key=lambda x: x["nps"]) # Lowest first
+    bad_products.sort(key=lambda x: x["nps"])
 
     return {
         "category_performance": categories,
@@ -108,26 +157,58 @@ def get_dashboard_stats(db, user_id, role):
         "bad_products": bad_products
     }
 
-def get_analytics_data(db, user_id, role):
-    from sqlalchemy import func
-    from app.models.product import Product
-
-    allowed_cats = get_allowed_categories(db, user_id) if role != "admin" else []
+async def get_analytics_data(db, user_id, role):
+    allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
     
-    # Base query for reviews
-    r_query = db.query(Review).join(Product, Review.product_id == Product.id)
-    if role != "admin" and allowed_cats:
-        r_query = r_query.filter(Product.category.in_(allowed_cats))
-    elif role != "admin" and not allowed_cats:
+    if role != "admin" and not allowed_cats:
         return {"current_nps": 0, "trend": [0,0,0,0,0,0], "distribution": {}}
+        
+    match_stage = {"$match": {"product_info.category": {"$in": allowed_cats}}} if role != "admin" else None
+
+    pipeline = [
+        {"$lookup": {
+            "from": "products",
+            "localField": "product_id",
+            "foreignField": "id",
+            "as": "product_info"
+        }},
+        {"$unwind": {"path": "$product_info", "preserveNullAndEmptyArrays": False}}
+    ]
     
-    total_reviews = r_query.with_entities(func.count()).scalar()
-    promoters = r_query.filter(Review.rating >= 4).with_entities(func.count()).scalar()
-    detractors = r_query.filter(Review.rating <= 2).with_entities(func.count()).scalar()
+    if match_stage:
+        pipeline.append(match_stage)
+        
+    # Facet to get both summary and distribution in one pass
+    pipeline.append({
+        "$facet": {
+            "summary": [
+                {"$group": {
+                    "_id": None,
+                    "total": {"$sum": 1},
+                    "promoters": {"$sum": {"$cond": [{"$gte": ["$rating", 4]}, 1, 0]}},
+                    "detractors": {"$sum": {"$cond": [{"$lte": ["$rating", 2]}, 1, 0]}}
+                }}
+            ],
+            "distribution": [
+                {"$group": {
+                    "_id": "$rating",
+                    "count": {"$sum": 1}
+                }}
+            ]
+        }
+    })
     
-    current_nps = round(((promoters - detractors) / total_reviews * 100)) if total_reviews and total_reviews > 0 else 0
+    cursor = db.reviews.aggregate(pipeline)
+    result = await cursor.to_list(length=1)
     
-    # Generate a smooth trend leading up to current_nps
+    if not result or not result[0]["summary"]:
+        return {"current_nps": 0, "trend": [0,0,0,0,0,0], "distribution": {}}
+        
+    summary = result[0]["summary"][0]
+    total = summary["total"]
+    
+    current_nps = round(((summary["promoters"] - summary["detractors"]) / total * 100)) if total > 0 else 0
+    
     nps_trend = [
         current_nps - 12,
         current_nps - 8,
@@ -136,10 +217,9 @@ def get_analytics_data(db, user_id, role):
         current_nps - 1,
         current_nps
     ]
-
-    # Distribution of ratings
-    ratings_dist = r_query.with_entities(Review.rating, func.count()).group_by(Review.rating).all()
-    distribution = {str(int(r[0])): r[1] for r in ratings_dist if r[0] is not None}
+    
+    distribution_list = result[0]["distribution"]
+    distribution = {str(int(d["_id"])): d["count"] for d in distribution_list if d["_id"] is not None}
     
     return {
         "current_nps": current_nps,

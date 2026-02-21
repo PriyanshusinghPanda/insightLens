@@ -1,13 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import Base, engine
-
-# import models so tables are created
-from app.models import user, product, review, report, conversation, analyst_category
 
 from app.routes import auth, analytics, chat, reports
-
-# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="InsightLens AI")
 
