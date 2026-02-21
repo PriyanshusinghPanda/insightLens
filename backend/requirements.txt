@@ -1,9 +1,10 @@
 python-dotenv
 uvicorn
 fastapi
-sqlalchemy
+sqlalchemy>=2.0.0
 libsql-client
 sqlalchemy-libsql
+libsql-experimental
 bcrypt
 python-jose[cryptography]
 google-genai
