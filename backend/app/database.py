@@ -17,15 +17,16 @@ def init_db():
     TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
     if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
-        url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+libsql://")
+        # Just use the simple sqlite+libsql:// url
+        db_url = TURSO_DATABASE_URL.replace("libsql://", "sqlite+libsql://")
 
-        import urllib.parse
-        parsed_url = urllib.parse.urlparse(url)
-        db_url = f"sqlite+libsql://:{TURSO_AUTH_TOKEN}@{parsed_url.netloc}/?secure=true"
-
+        # Pass the auth token directly to the underlying DBAPI driver
         engine = create_engine(
             db_url,
-            connect_args={"check_same_thread": False}
+            connect_args={
+                "check_same_thread": False,
+                "auth_token": TURSO_AUTH_TOKEN
+            }
         )
     else:
         engine = create_engine(
