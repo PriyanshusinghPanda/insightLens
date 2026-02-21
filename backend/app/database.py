@@ -8,14 +8,11 @@ db_token = os.getenv("TURSO_AUTH_TOKEN")
 if db_url and db_token:
     if db_url.startswith("https://"):
         db_url = db_url.replace("https://", "libsql://", 1)
-    DATABASE_URL = f"sqlite+{db_url}?auth_token={db_token}"
-else:
-    DATABASE_URL = "sqlite:///./insightlens.db"
-
-if "libsql" in DATABASE_URL:
+    DATABASE_URL = f"sqlite+libsql://{db_url.replace('libsql://', '')}?auth_token={db_token}"    
     engine = create_engine(DATABASE_URL)
 else:
+    DATABASE_URL = "sqlite:///./insightlens.db"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-SessionLocal = sessionmaker(bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
