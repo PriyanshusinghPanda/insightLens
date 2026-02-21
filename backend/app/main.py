@@ -23,3 +23,8 @@ app.include_router(auth.router, prefix="/auth")
 app.include_router(analytics.router, prefix="/analytics")
 app.include_router(chat.router, prefix="/chat")
 app.include_router(reports.router, prefix="/reports")
+
+
+@app.get("/")
+def read_root():
+    return {"status": "InsightLens API is running"}
