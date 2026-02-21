@@ -18,10 +18,16 @@ class LoginRequest(BaseModel):
 
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    user = User(email=req.email, password=hash_password(req.password), role=req.role)
-    db.add(user)
-    db.commit()
-    return {"message": "created"}
+    import traceback
+    try:
+        user = User(email=req.email, password=hash_password(req.password), role=req.role)
+        db.add(user)
+        db.commit()
+        return {"message": "created"}
+    except Exception as e:
+        error_info = traceback.format_exc()
+        return {"error": "Server crashed", "traceback": error_info}
+
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
