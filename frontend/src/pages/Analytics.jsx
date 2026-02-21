@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAnalyticsData } from "../api";
+import { getAnalyticsData, getProducts, getInsights } from "../api";
 import { Line } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -30,9 +30,44 @@ export default function Analytics() {
         distribution: {}
     });
 
+    const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
+
+    // Filters
+    const [selectedCat, setSelectedCat] = useState("");
+    const [selectedProd, setSelectedProd] = useState("");
+
+    // AI Insights
+    const [insights, setInsights] = useState("");
+    const [loadingInsights, setLoadingInsights] = useState(false);
+
     useEffect(() => {
-        getAnalyticsData(token).then(res => setData(res.data)).catch(console.error);
+        getProducts(token).then(res => {
+            setProducts(res.data);
+            const uniqueCats = [...new Set(res.data.map(p => p.category))];
+            setCategories(uniqueCats);
+        }).catch(console.error);
     }, [token]);
+
+    useEffect(() => {
+        getAnalyticsData(token, selectedCat, selectedProd).then(res => {
+            setData(res.data);
+            setInsights(""); // Clear insights when data changes
+        }).catch(console.error);
+    }, [token, selectedCat, selectedProd]);
+
+    const handleGenerateInsights = async () => {
+        setLoadingInsights(true);
+        try {
+            const res = await getInsights(token, selectedCat || null, selectedProd || null);
+            setInsights(res.data.insights);
+        } catch (e) {
+            console.error(e);
+            setInsights("Failed to generate AI insights.");
+        } finally {
+            setLoadingInsights(false);
+        }
+    };
 
     const chartData = {
         labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
@@ -56,8 +91,7 @@ export default function Analytics() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6, font: { family: 'Inter, sans-serif' } } },
-            tooltip: { backgroundColor: '#fff', titleColor: '#111', bodyColor: '#444', borderColor: '#eaeaea', borderWidth: 1 }
+            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6 } }
         },
         scales: {
             y: { beginAtZero: true, max: 100, grid: { borderDash: [4, 4], color: '#f3f4f6' } },
@@ -65,11 +99,41 @@ export default function Analytics() {
         }
     };
 
+    const filteredProducts = selectedCat
+        ? products.filter(p => p.category === selectedCat)
+        : products;
+
     return (
         <div className="page-container">
             <div>
-                <h2 className="page-title">Analytics</h2>
-                <div className="page-subtitle">Deep dive into NPS trends, sentiment, and rating distributions</div>
+                <h2 className="page-title">Analytics Deep Dive</h2>
+                <div className="page-subtitle">Granular performance filters and custom AI interpretations</div>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="dashboard-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: "24px" }}>
+                <div className="dashboard-card" style={{ padding: "16px 24px" }}>
+                    <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>Filter by Category</label>
+                    <select
+                        className="minimal-input"
+                        value={selectedCat}
+                        onChange={(e) => { setSelectedCat(e.target.value); setSelectedProd(""); }}
+                    >
+                        <option value="">All Categories</option>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+                <div className="dashboard-card" style={{ padding: "16px 24px" }}>
+                    <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>Filter by Product</label>
+                    <select
+                        className="minimal-input"
+                        value={selectedProd}
+                        onChange={(e) => setSelectedProd(e.target.value)}
+                    >
+                        <option value="">All Products</option>
+                        {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
             </div>
 
             <div className="dashboard-card" style={{ padding: "0" }}>
@@ -79,11 +143,6 @@ export default function Analytics() {
                     <div style={{ height: "300px" }}>
                         <Line data={chartData} options={chartOptions} />
                     </div>
-                </div>
-
-                {/* Highlight Banner Section */}
-                <div className="analytics-banner">
-                    <b>Current NPS: {data.current_nps}</b> - Indicating customer loyalty based on the distribution of your latest product reviews.
                 </div>
             </div>
 
@@ -100,7 +159,7 @@ export default function Analytics() {
 
                 <div className="dashboard-card" style={{ height: "300px" }}>
                     <h3 className="card-title" style={{ fontSize: "14px" }}>Rating Distribution</h3>
-                    <div style={{ padding: "0 20px" }}>
+                    <div style={{ padding: "0 20px", marginTop: "20px" }}>
                         {["5", "4", "3", "2", "1"].map(star => {
                             const maxDist = Math.max(...Object.values(data.distribution), 1);
                             const val = data.distribution[star] || 0;
@@ -122,6 +181,34 @@ export default function Analytics() {
                             );
                         })}
                     </div>
+                </div>
+            </div>
+
+            {/* AI Insights Section */}
+            <div className="dashboard-card full-width" style={{ marginTop: "24px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                    <h3 className="card-title" style={{ margin: 0 }}>✨ AI Guided Insights</h3>
+                    <button
+                        className="minimal-button"
+                        style={{ width: "auto", padding: "8px 16px", backgroundColor: "#8b5cf6" }}
+                        onClick={handleGenerateInsights}
+                        disabled={loadingInsights}
+                    >
+                        {loadingInsights ? "Generating..." : "Generate AI Insights"}
+                    </button>
+                </div>
+
+                <div style={{
+                    minHeight: "100px",
+                    backgroundColor: "#f9fafb",
+                    borderRadius: "8px",
+                    padding: "20px",
+                    border: "1px solid #e5e7eb",
+                    whiteSpace: "pre-wrap",
+                    lineHeight: "1.6",
+                    color: "#374151"
+                }}>
+                    {insights || <span style={{ color: "#9ca3af", fontStyle: "italic" }}>Click 'Generate AI Insights' to automatically summarize the reviews across your current filter combination.</span>}
                 </div>
             </div>
         </div>

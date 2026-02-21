@@ -71,7 +71,12 @@ async def get_dashboard_stats(db, user_id, role):
     
     match_stage = {"$match": {"category": {"$in": allowed_cats}}} if (role != "admin" and allowed_cats) else {}
     if role != "admin" and not allowed_cats:
-        return {"category_performance": [], "top_products": [], "bad_products": []}
+        return {
+            "category_performance": [], "top_products": [], "bad_products": [],
+            "kpis": {"nps": 0, "total_reviews": 0, "happy_pct": 0, "worst_product": "N/A"},
+            "satisfaction": {"happy": 0, "unhappy": 0},
+            "rating_distribution": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+        }
 
     # Pipeline for Products + Reviews data combined
     pipeline = []
@@ -151,21 +156,67 @@ async def get_dashboard_stats(db, user_id, role):
     bad_products = product_scores[-5:]
     bad_products.sort(key=lambda x: x["nps"])
 
+    # 3. Overall KPIs Pipeline
+    kpi_pipeline = pipeline + [
+        {"$group": {
+            "_id": None,
+            "total_reviews": {"$sum": 1},
+            "promoters": {"$sum": "$is_promoter"},
+            "detractors": {"$sum": "$is_detractor"},
+            "happy": {"$sum": {"$cond": [{"$gte": ["$rating", 4]}, 1, 0]}},
+            "unhappy": {"$sum": {"$cond": [{"$lte": ["$rating", 3]}, 1, 0]}},
+            "rating_1": {"$sum": {"$cond": [{"$eq": ["$rating", 1]}, 1, 0]}},
+            "rating_2": {"$sum": {"$cond": [{"$eq": ["$rating", 2]}, 1, 0]}},
+            "rating_3": {"$sum": {"$cond": [{"$eq": ["$rating", 3]}, 1, 0]}},
+            "rating_4": {"$sum": {"$cond": [{"$eq": ["$rating", 4]}, 1, 0]}},
+            "rating_5": {"$sum": {"$cond": [{"$eq": ["$rating", 5]}, 1, 0]}}
+        }}
+    ]
+    
+    kpi_cursor = db.products.aggregate(kpi_pipeline)
+    kpis = {"nps": 0, "total_reviews": 0, "happy_pct": 0, "worst_product": "N/A"}
+    satisfaction = {"happy": 0, "unhappy": 0}
+    rating_distribution = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+
+    async for stat in kpi_cursor:
+        total = stat["total_reviews"]
+        if total > 0:
+            kpis["total_reviews"] = total
+            kpis["nps"] = round(((stat["promoters"] - stat["detractors"]) / total) * 100)
+            kpis["happy_pct"] = round((stat["happy"] / total) * 100)
+        
+        satisfaction["happy"] = stat["happy"]
+        satisfaction["unhappy"] = stat["unhappy"]
+        
+        rating_distribution["1"] = stat["rating_1"]
+        rating_distribution["2"] = stat["rating_2"]
+        rating_distribution["3"] = stat["rating_3"]
+        rating_distribution["4"] = stat["rating_4"]
+        rating_distribution["5"] = stat["rating_5"]
+
+    if bad_products:
+        kpis["worst_product"] = bad_products[0]["name"]
+
     return {
         "category_performance": categories,
         "top_products": top_products,
-        "bad_products": bad_products
+        "bad_products": bad_products,
+        "kpis": kpis,
+        "satisfaction": satisfaction,
+        "rating_distribution": rating_distribution
     }
 
-async def get_analytics_data(db, user_id, role):
+async def get_filtered_reviews(db, user_id, role, category=None, product_id=None):
     allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
     
     if role != "admin" and not allowed_cats:
-        return {"current_nps": 0, "trend": [0,0,0,0,0,0], "distribution": {}}
+        return []
         
-    match_stage = {"$match": {"product_info.category": {"$in": allowed_cats}}} if role != "admin" else None
+    pipeline = []
+    if product_id is not None:
+        pipeline.append({"$match": {"product_id": product_id}})
 
-    pipeline = [
+    pipeline.extend([
         {"$lookup": {
             "from": "products",
             "localField": "product_id",
@@ -173,10 +224,50 @@ async def get_analytics_data(db, user_id, role):
             "as": "product_info"
         }},
         {"$unwind": {"path": "$product_info", "preserveNullAndEmptyArrays": False}}
-    ]
+    ])
     
-    if match_stage:
-        pipeline.append(match_stage)
+    match_conditions = []
+    if role != "admin":
+        match_conditions.append({"product_info.category": {"$in": allowed_cats}})
+        
+    if category:
+        match_conditions.append({"product_info.category": category})
+        
+    if match_conditions:
+        pipeline.append({"$match": {"$and": match_conditions}})
+        
+    cursor = db.reviews.aggregate(pipeline)
+    return await cursor.to_list(length=100)
+
+async def get_analytics_data(db, user_id, role, category=None, product_id=None):
+    allowed_cats = await get_allowed_categories(db, user_id) if role != "admin" else []
+    
+    if role != "admin" and not allowed_cats:
+        return {"current_nps": 0, "trend": [0,0,0,0,0,0], "distribution": {}}
+        
+    pipeline = []
+    if product_id is not None:
+        pipeline.append({"$match": {"product_id": product_id}})
+
+    pipeline.extend([
+        {"$lookup": {
+            "from": "products",
+            "localField": "product_id",
+            "foreignField": "id",
+            "as": "product_info"
+        }},
+        {"$unwind": {"path": "$product_info", "preserveNullAndEmptyArrays": False}}
+    ])
+    
+    match_conditions = []
+    if role != "admin":
+        match_conditions.append({"product_info.category": {"$in": allowed_cats}})
+        
+    if category:
+        match_conditions.append({"product_info.category": category})
+        
+    if match_conditions:
+        pipeline.append({"$match": {"$and": match_conditions}})
         
     # Facet to get both summary and distribution in one pass
     pipeline.append({

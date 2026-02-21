@@ -34,6 +34,11 @@ export default function Sidebar() {
                 <Link to="/reports" className={`sidebar-link ${isActive('/reports')}`}>
                     <span className="sidebar-link-icon">📄</span> Reports
                 </Link>
+                {localStorage.getItem("role") === "admin" && (
+                    <Link to="/admin" className={`sidebar-link ${isActive('/admin')}`}>
+                        <span className="sidebar-link-icon">⚙️</span> Admin Panel
+                    </Link>
+                )}
             </nav>
 
             <div className="sidebar-footer">

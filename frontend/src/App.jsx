@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
+import AdminPanel from "./pages/AdminPanel";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Sidebar from "./components/Sidebar";
 import "./App.css";
@@ -30,6 +31,7 @@ function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/admin" element={<AdminPanel />} />
       </Route>
     </Routes>
   );
