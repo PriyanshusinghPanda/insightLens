@@ -277,12 +277,25 @@ async def run_tool_call(query: str, db, user_id, role, context_product_id: int |
     # Step 1: Ask Gemini which tool to call
     def _call_gemini_step1():
         return client.models.generate_content(
-            model="gemini-2.0-flash",
+            model='gemini-2.5-flash',
             contents=augmented_query,
             config=config
         )
 
-    response1 = await asyncio.to_thread(_call_gemini_step1)
+    try:
+        response1 = await asyncio.wait_for(
+            asyncio.to_thread(_call_gemini_step1),
+            timeout=15.0
+        )
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return {
+                "answer": "The AI service is temporarily unavailable due to rate limits. Please try again in a few seconds.",
+                "tool_used": None,
+                "tool_args": None,
+                "chart_data": None
+            }
+        raise
 
     # Extract function call from response
     tool_name = None
@@ -336,12 +349,26 @@ async def run_tool_call(query: str, db, user_id, role, context_product_id: int |
 
     def _call_gemini_step2():
         return client.models.generate_content(
-            model="gemini-2.0-flash",
+            model='gemini-2.5-flash',
             contents=conversation,
             config=config2
         )
 
-    response2 = await asyncio.to_thread(_call_gemini_step2)
+    try:
+        response2 = await asyncio.wait_for(
+            asyncio.to_thread(_call_gemini_step2),
+            timeout=15.0
+        )
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return {
+                "answer": "I have the data ready, but the AI formatter is hit with a rate limit. Please try again briefly.",
+                "tool_used": tool_name,
+                "tool_args": tool_args,
+                "chart_data": chart_data
+            }
+        raise
+
     final_answer = response2.text or "I retrieved the data but couldn't format an answer."
 
     return {
@@ -381,10 +408,18 @@ Format your response EXACTLY with these markdown headers:
 """
 
     def generate():
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        return client.models.generate_content(
+            model='gemini-2.5-flash',
             contents=prompt,
         )
-        return response.text
 
-    return await asyncio.to_thread(generate)
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(generate),
+            timeout=20.0
+        )
+        return response.text
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return "Summarization is temporarily unavailable due to rate limits."
+        return f"Error during summarization: {str(e)}"
