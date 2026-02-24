@@ -80,6 +80,23 @@ export const assignCategory = (token, user_id, category) =>
     { headers: { Authorization: `Bearer ${token}` } }
   );
 
+export const revokeCategory = (token, user_id, category) =>
+  API.delete("/admin/revoke-category", {
+    data: { user_id, category },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+export const getAdminCategories = (token) =>
+  API.get("/admin/categories", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+export const getMe = (token) =>
+  API.get("/auth/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+
 export const getProducts = (token) =>
   API.get("/analytics/products", {
     headers: { Authorization: `Bearer ${token}` },
