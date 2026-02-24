@@ -22,14 +22,13 @@ export const login = (email, password) =>
 export const register = (email, password, role) =>
   API.post("/auth/register", { email, password, role });
 
-export const askQuestion = (product_id, question, token) =>
+export const askQuestion = (query, token, contextProductId = null) =>
   API.post(
     "/chat/ask",
-    { product_id, question },
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    { query, context_product_id: contextProductId || undefined },
+    { headers: { Authorization: `Bearer ${token}` } }
   );
+
 
 export const getNPS = (id, token) =>
   API.get(`/analytics/nps/${id}`, {
@@ -88,5 +87,10 @@ export const getProducts = (token) =>
 
 export const getReports = (token) =>
   API.get("/reports/my-reports", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+export const getChatHistory = (token) =>
+  API.get("/chat/history", {
     headers: { Authorization: `Bearer ${token}` },
   });
